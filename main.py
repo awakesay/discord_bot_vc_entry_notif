@@ -8,7 +8,7 @@ import discord
 
 def run_bot():
 
-    intents = discord.Intents.default()
+    intents = discord.Intents.all()
     intents.message_content = True
     bot = discord.Bot(intents=intents)
     
