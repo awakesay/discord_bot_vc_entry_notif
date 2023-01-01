@@ -49,7 +49,6 @@ def get_channel(vc_tc: dict, vc: int) -> Union[int, None]:
     """ボイスチャンネルIDに対応したテキストチャンネルIDを返します。"""
     return vc_tc.get(str(vc), None)
 
-
 @cache  # キャッシュによる高速化
 def get_config_json(name: str) -> Union[list, dict]:
     """configフォルダ内の設定を取得して返します。"""
