@@ -30,7 +30,7 @@ def run_bot():
         elif member.bot:
             return  # イベントを発生させたのがボットのときは早期リターン
         else:
-            msg = get_msg(rand_msg, member.name)                # 表示メッセージ取得
+            msg = get_msg(rand_msg, member.name, after.channel.name)                # 表示メッセージ取得
             emb = discord.Embed(title=msg, color=0x2ecc71)      # Embedオブジェクト生成
             channel_id = get_channel(vc_tc, after.channel.id)   # 投稿するテキストチャンネルID取得
             channel = bot.get_channel(channel_id)               # チャンネルIDからチャンネルオブジェクト取得
@@ -39,10 +39,10 @@ def run_bot():
     bot.run(get_config_json('discord_bot')['token'])
 
 
-def get_msg(rand_msg: list, name: str) -> str:
+def get_msg(rand_msg: list, name: str, vc_name: str) -> str:
     """メッセージをランダムに選択＆名前を置換して返します。"""
     raw_msg = random.sample(rand_msg, 1)[0]
-    return raw_msg.replace('{name}', name)
+    return raw_msg.replace('{name}', name).replace('{vc_name}', vc_name)
 
 
 def get_channel(vc_tc: dict, vc: int) -> Union[int, None]:
