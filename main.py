@@ -59,15 +59,15 @@ def run_bot():
         rand_msg.append(add_msg)
         res = set_config_json('rand_msg', rand_msg)
         if res[0]:
-            await ctx.channel.send(f'{add_msg}\nを追加しました。')
+            await ctx.channel.send(f'```\n「{add_msg}」\nを追加しました。\n```')
         else:
-            await ctx.channel.send(f'エラーが発生しました。\n{res[1]}')
+            await ctx.channel.send(f'```\nエラーが発生しました。\n{res[1]}\n```')
 
 
     @bot.slash_command(description='VC入室時のメッセージを削除します。')
     async def vce_del_msg(
         ctx: discord.ApplicationContext,
-        del_number: discord.Option(str, required=True, description='{name}はユーザー名、{vc_name}はボイスチャンネル名に置換します。')
+        del_number: discord.Option(int, required=True, description='/vce_list コマンドで表示した番号を選択してください。（注意：最新の番号を確認）')
     ):
         """メッセージを削除します。"""
         await ctx.respond(f'```\ncmd: vce_del_msg, args: {del_number}\n```')
@@ -75,9 +75,9 @@ def run_bot():
         del_msg = rand_msg.pop(del_number)
         res = set_config_json('rand_msg', rand_msg)
         if res[0]:
-            await ctx.channel.send(f'{del_msg}\nを削除しました。')
+            await ctx.channel.send(f'```\n「{del_msg}」\nを削除しました。\n```')
         else:
-            await ctx.channel.send(f'エラーが発生しました。\n{res[1]}')
+            await ctx.channel.send(f'```\nエラーが発生しました。\n{res[1]}\n```')
 
 
     bot.run(get_config_json('discord_bot')['token'])
@@ -106,7 +106,7 @@ def set_config_json(name: str, set_obj: Union[list, dict]) -> list[bool, str]:
     try:
         path = f'{os.path.abspath(os.path.dirname(__file__))}/config/{name}.json'
         with open(path, 'w', encoding='utf-8') as f:
-            json.dump(set_obj, f)
+            json.dump(set_obj, f, indent=4, ensure_ascii=False)
             return True, ''
     except Exception as e:
             return False, str(e)

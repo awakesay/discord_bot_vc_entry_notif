@@ -6,3 +6,6 @@
 # }  
 /config/discord_bot.json
 
+# ランダムメッセージ
+# Discrodに追加・削除コマンドを追加したので、ローカル側を正とします。
+/config/rand_msg.json
