@@ -18,6 +18,7 @@ def run_bot():
         print('on_ready')
         print(f'version: {discord.__version__}')
 
+
     @bot.event
     async def on_voice_state_update(member, before, after):
         """ボイスチャンネル入室通知"""
@@ -38,7 +39,7 @@ def run_bot():
     
 
     @bot.slash_command(description='VC入室時のメッセージ一覧を表示します。')
-    async def vce_list(ctx):
+    async def vce_msg_list(ctx):
         """メッセージ一覧を表示します。"""
         await ctx.respond(f'```\ncmd: vce_list\n```')
         msg = ''
@@ -80,6 +81,14 @@ def run_bot():
             await ctx.channel.send(f'```\nエラーが発生しました。\n{res[1]}\n```')
 
 
+    @bot.slash_command(description='')
+    async def vce_channel_list(ctx: discord.ApplicationContext):
+        """ボイスチャンネルとテキストチャンネルの紐付けリストを表示します。（投稿したサーバー内のみ）"""
+        await ctx.respond(f'```\ncmd: vce_channel_list\n```')
+        channels = get_detail_vctc(bot, ctx)
+        print('aaa') # TODO: ここから
+
+
     bot.run(get_config_json('discord_bot')['token'])
 
 
@@ -93,7 +102,7 @@ def get_channel_id(vc_tc: dict, vc: int) -> Union[int, None]:
     """ボイスチャンネルIDに対応したテキストチャンネルIDを返します。"""
     return vc_tc.get(str(vc), None)
 
-#@cache  # キャッシュによる高速化
+
 def get_config_json(name: str) -> Union[list, dict]:
     """configフォルダ内の設定を取得して返します。"""
     path = f'{os.path.abspath(os.path.dirname(__file__))}/config/{name}.json'
@@ -110,6 +119,24 @@ def set_config_json(name: str, set_obj: Union[list, dict]) -> list[bool, str]:
             return True, ''
     except Exception as e:
             return False, str(e)
+
+
+def get_detail_vctc(bot: discord.Bot) -> list[dict]:
+    vc_tc = get_config_json('vc_tc')
+    del vc_tc['str: voice_channel']
+    channels = []
+    for vc_str, tc_int in vc_tc.items():
+        vc_id, tc_id = int(vc_str), tc_int
+        try:
+            vc = bot.get_channel(vc_id)
+        except:
+            vc = None
+        try:
+            tc = bot.get_channel(tc_id)
+        except:
+            tc = None
+        channels.appned({'vc': vc, 'tc': tc})
+    return channels
 
 
 if __name__ == '__main__':
