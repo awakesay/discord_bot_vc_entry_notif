@@ -60,7 +60,7 @@ def run_bot():
         rand_msg.append(add_msg)
         res = set_config_json('rand_msg', rand_msg)
         if res[0]:
-            await ctx.channel.send(f'```\n「{add_msg}」\nを追加しました。\n```')
+            await ctx.channel.send(f'```\n「{add_msg}」を追加しました。\n```')
         else:
             await ctx.channel.send(f'```\nエラーが発生しました。\n{res[1]}\n```')
 
@@ -76,17 +76,38 @@ def run_bot():
         del_msg = rand_msg.pop(del_number)
         res = set_config_json('rand_msg', rand_msg)
         if res[0]:
-            await ctx.channel.send(f'```\n「{del_msg}」\nを削除しました。\n```')
+            await ctx.channel.send(f'```\n「{del_msg}」を削除しました。\n```')
         else:
             await ctx.channel.send(f'```\nエラーが発生しました。\n{res[1]}\n```')
 
 
-    @bot.slash_command(description='')
+    @bot.slash_command(description='VCとTCの紐付け一覧を表示します。（コマンド実行サーバーのみ）')
     async def vce_channel_list(ctx: discord.ApplicationContext):
         """ボイスチャンネルとテキストチャンネルの紐付けリストを表示します。（投稿したサーバー内のみ）"""
         await ctx.respond(f'```\ncmd: vce_channel_list\n```')
-        channels = get_detail_vctc(bot, ctx)
-        print('aaa') # TODO: ここから
+        channels = get_detail_vctc(bot)
+        msg = ''
+        for ch in channels:
+            sep = '\n------------------------------' if msg != '' else ''
+            msg += '\n'.join([
+                sep,
+                f"vc_id: {ch['vc'].id}",
+                f"vc_name: {ch['vc'].category.name}/{ch['vc'].name}",   # vcカテゴリー名.チャンネル名
+                f"tc_id: {ch['tc'].id}",
+                f"tc_name: {ch['tc'].category.name}/{ch['tc'].name}"    # tcカテゴリー名.チャンネル名
+            ])
+        await ctx.channel.send(f'```\n{msg}\n```')
+
+
+    @bot.slash_command(description='')
+    async def vce_add_channel(
+        ctx: discord.ApplicationContext,
+        vc_id: discord.Option(int, required=True, description='ボイスチャンネルIDを入力'),
+        tc_id: discord.Option(int, required=True, description='テキストチャンネルIDを入力')
+    ):
+        """ボイスチャンネルとテキストチャンネルを紐つけます。（コマンド実行サーバーのみ。VCとTCは同一サーバー）"""
+        await ctx.respond(f'```\ncmd: vce_add_channel, vc_id: {vc_id}, tc_id: {tc_id}\n```')
+        # TODO: ここから
 
 
     bot.run(get_config_json('discord_bot')['token'])
@@ -126,16 +147,10 @@ def get_detail_vctc(bot: discord.Bot) -> list[dict]:
     del vc_tc['str: voice_channel']
     channels = []
     for vc_str, tc_int in vc_tc.items():
-        vc_id, tc_id = int(vc_str), tc_int
-        try:
-            vc = bot.get_channel(vc_id)
-        except:
-            vc = None
-        try:
-            tc = bot.get_channel(tc_id)
-        except:
-            tc = None
-        channels.appned({'vc': vc, 'tc': tc})
+        vc = bot.get_channel(int(vc_str))
+        tc = bot.get_channel(tc_int)
+        if not (vc == None or tc == None):
+            channels.append({'vc': vc, 'tc': tc})
     return channels
 
 
