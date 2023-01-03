@@ -1,6 +1,7 @@
 
 import os
 import json
+import platform
 import random
 from typing import Union
 from functools import cache
@@ -15,8 +16,9 @@ def run_bot():
     @bot.event
     async def on_ready():
         """起動メッセージ"""
-        print('on_ready')
-        print(f'version: {discord.__version__}')
+        print(f'{"-"*30}\non_ready: discord_bot_vc_entry')
+        print(f'python_version: {platform.python_version()}')
+        print(f'pycord_version: {discord.__version__}')
 
 
     @bot.event
