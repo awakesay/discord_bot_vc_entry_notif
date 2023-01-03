@@ -4,7 +4,6 @@ import json
 import platform
 import random
 from typing import Union
-from functools import cache
 import discord
 
 def run_bot():
