@@ -102,7 +102,11 @@ def run_bot():
     @bot.slash_command(description='')
     async def vce_add_channel(
         ctx: discord.ApplicationContext,
-        vc_id: discord.Option(int, required=True, description='ボイスチャンネルIDを入力'),
+        vc_id: discord.Option(
+            input_type=int,
+            description='ボイスチャンネルIDを入力',
+            choices=['vc_entry', 'textra'],
+            required=True, ),
         tc_id: discord.Option(int, required=True, description='テキストチャンネルIDを入力')
     ):
         """ボイスチャンネルとテキストチャンネルを紐つけます。（コマンド実行サーバーのみ。VCとTCは同一サーバー）"""
