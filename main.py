@@ -73,7 +73,11 @@ def run_bot():
         """メッセージを削除します。"""
         await ctx.respond(f'```\ncmd: vce_del_msg, args: {del_number}\n```')
         rand_msg = get_config_json('rand_msg')
-        del_msg = rand_msg.pop(del_number)
+        try:
+            del_msg = rand_msg.pop(del_number)
+        except IndexError:
+            await ctx.channel.send(f'```\n有効な番号を入力してください。\n```')
+            return
         res = set_config_json('rand_msg', rand_msg)
         if res[0]:
             await ctx.channel.send(f'```\n「{del_msg}」を削除しました。\n```')
