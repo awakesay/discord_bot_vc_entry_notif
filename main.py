@@ -42,12 +42,12 @@ def run_bot():
     @bot.slash_command(description='VC入室時のメッセージ一覧を表示します。')
     async def vce_msg_list(ctx):
         """メッセージ一覧を表示します。"""
-        await ctx.respond(f'```cmd: vce_list```')
+        await ctx.respond(content=f'```cmd: vce_msg_list```', ephemeral=True)
         msg = ''
         for i, message in enumerate(get_config_json('rand_msg')):
             number = str(i).rjust(3, ' ')
             msg += f'\n{number}: {message}'
-        await ctx.channel.send(f'```{msg}```')
+        await ctx.respond(content=f'```{msg}```', ephemeral=True)
 
 
     @bot.slash_command(description='VC入室時のメッセージを追加します。')
@@ -56,14 +56,14 @@ def run_bot():
         add_msg: discord.Option(str, required=True, description='{name}はユーザー名、{vc_name}はボイスチャンネル名に置換します。')
     ):
         """メッセージを追加します。"""
-        await ctx.respond(f'```cmd: vce_add_msg, args: {add_msg}```')
+        await ctx.respond(content=f'```cmd: vce_add_msg, args: {add_msg}```', ephemeral=True)
         rand_msg = get_config_json('rand_msg')
         rand_msg.append(add_msg)
         res = set_config_json('rand_msg', rand_msg)
         if res[0]:
-            await ctx.channel.send(f'```「{add_msg}」を追加しました。```')
+            await ctx.respond(content=f'```「{add_msg}」を追加しました。```', ephemeral=True)
         else:
-            await ctx.channel.send(f'```エラーが発生しました。\n{res[1]}```')
+            await ctx.respond(content=f'```エラーが発生しました。\n{res[1]}```', ephemeral=True)
 
 
     @bot.slash_command(description='VC入室時のメッセージを削除します。')
@@ -72,24 +72,24 @@ def run_bot():
         del_number: discord.Option(int, required=True, description='/vce_list コマンドで表示した番号を選択してください。（注意：最新の番号を確認）')
     ):
         """メッセージを削除します。"""
-        await ctx.respond(f'```cmd: vce_del_msg, args: {del_number}```')
+        await ctx.respond(content=f'```cmd: vce_del_msg, args: {del_number}```', ephemeral=True)
         rand_msg = get_config_json('rand_msg')
         try:
             del_msg = rand_msg.pop(del_number)
         except IndexError:
-            await ctx.channel.send(f'```有効な番号を入力してください。```')
+            await ctx.respond(content=f'```有効な番号を入力してください。```', ephemeral=True)
             return
         res = set_config_json('rand_msg', rand_msg)
         if res[0]:
-            await ctx.channel.send(f'```「{del_msg}」を削除しました。```')
+            await ctx.respond(content=f'```「{del_msg}」を削除しました。```', ephemeral=True)
         else:
-            await ctx.channel.send(f'```エラーが発生しました。\n{res[1]}```')
+            await ctx.respond(content=f'```エラーが発生しました。\n{res[1]}```', ephemeral=True)
 
 
     @bot.slash_command(description='VCとTCの紐付け一覧を表示します。（コマンド実行サーバーのみ）')
     async def vce_channel_list(ctx: discord.ApplicationContext):
         """ボイスチャンネルとテキストチャンネルの紐付けリストを表示します。（投稿したサーバー内のみ）"""
-        await ctx.respond(f'```cmd: vce_channel_list```')
+        await ctx.respond(content=f'```cmd: vce_channel_list```', ephemeral=True)
         channels = get_detail_vctc(bot)
         msg = ''
         for i, ch in enumerate(channels):
@@ -97,7 +97,7 @@ def run_bot():
             vc = f"vc: {ch['vc'].category.name}/{ch['vc'].name}"    # vcカテゴリー名/チャンネル名
             tc = f"tc: {ch['tc'].category.name}/{ch['tc'].name}"    # tcカテゴリー名/チャンネル名
             msg += f"{sep}{str(i).rjust(3, ' ')}: {vc}\n{str(i).rjust(3, ' ')}: {tc}"
-        await ctx.channel.send(f'```{msg}```')
+        await ctx.respond(content=f'```{msg}```', ephemeral=True)
 
 
     @bot.slash_command(description='ボイスチャンネルとテキストチャンネルを紐付けます。')
@@ -113,7 +113,7 @@ def run_bot():
         )
     ):
         """ボイスチャンネルとテキストチャンネルを紐つけます。（コマンド実行サーバーのみ。VCとTCは同一サーバー）"""
-        await ctx.respond(f'```cmd: vce_add_channel, vc_id: {vc_id}, tc_id: {tc_id}```')
+        await ctx.respond(content=f'```cmd: vce_add_channel, vc_id: {vc_id}, tc_id: {tc_id}```', ephemeral=True)
         res = add_channel(bot, vc_id, tc_id)
         msg = '\n'.join([
             'cmd: vce_add_channel',
@@ -122,7 +122,7 @@ def run_bot():
             f"result: {'失敗' if res['result'] == None else '成功'}",
             f"msg: {res['msg']}"
         ])
-        await ctx.channel.send(f'```{msg}```')
+        await ctx.respond(content=f'```{msg}```', ephemeral=True)
 
 
     @bot.slash_command(description='ボイスチャンネルとテキストチャンネルの紐付けを解除します。')
@@ -133,7 +133,7 @@ def run_bot():
             required=True, min_lengtth=18, max_length=18
         )
     ):
-        await ctx.respond(f'```cmd: vce_del_channel, vc_id: {vc_id}```')
+        await ctx.respond(content=f'```cmd: vce_del_channel, vc_id: {vc_id}```', ephemeral=True)
         res = del_channel(vc_id)
         msg = '\n'.join([
             'cmd: vce_del_channel',
@@ -141,7 +141,7 @@ def run_bot():
             f"result: {'失敗' if res['result'] == None else '成功'}",
             f"msg: {res['msg']}"
         ])
-        await ctx.channel.send(f'```{msg}```')
+        await ctx.respond(content=f'```{msg}```', ephemeral=True)
 
 
     bot.run(get_config_json('discord_bot')['token'])
