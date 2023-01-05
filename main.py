@@ -40,7 +40,7 @@ def run_bot():
     
 
     @bot.slash_command(description='VC入室時のメッセージ一覧を表示します。')
-    async def vce_msg_list(ctx):
+    async def vce_msg_list(ctx: discord.ApplicationContext):
         """メッセージ一覧を表示します。"""
         await ctx.respond(content=f'```cmd: vce_msg_list```', ephemeral=True)
         msg = ''
