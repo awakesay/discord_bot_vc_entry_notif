@@ -1,4 +1,3 @@
-
 import os
 import json
 import platform
@@ -32,7 +31,11 @@ def run_bot():
         elif member.bot:
             return  # イベントを発生させたのがボットのときは早期リターン
         else:
-            msg = get_msg(rand_msg, member.name, after.channel.name)# 表示メッセージ取得
+            if member.nick == None:
+                member_name = member.name
+            else:
+                member_name = member.nick
+            msg = get_msg(rand_msg, member_name, after.channel.name)# 表示メッセージ取得
             emb = discord.Embed(title=msg, color=0x2ecc71)          # Embedオブジェクト生成
             channel_id = get_channel_id(vc_tc, after.channel.id)    # 投稿するテキストチャンネルID取得
             channel = bot.get_channel(channel_id)                   # チャンネルIDからチャンネルオブジェクト取得
