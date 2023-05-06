@@ -107,12 +107,12 @@ def run_bot():
     async def vce_add_channel(
         ctx: discord.ApplicationContext,
         vc_id: discord.Option(
-            input_type=str, description='18桁のボイスチャンネルIDを入力してください。',
-            required=True, min_length=18, max_length=18
+            input_type=str, description='18-19桁のボイスチャンネルIDを入力してください。',
+            required=True, min_length=18, max_length=19
         ),
         tc_id: discord.Option(
-            input_type=str,  description='18桁のテキストチャンネルIDを入力してください。',
-            required=True, min_length=18, max_length=18
+            input_type=str,  description='18-19桁のテキストチャンネルIDを入力してください。',
+            required=True, min_length=18, max_length=19
         )
     ):
         """ボイスチャンネルとテキストチャンネルを紐つけます。（コマンド実行サーバーのみ。VCとTCは同一サーバー）"""
@@ -132,8 +132,8 @@ def run_bot():
     async def vce_del_channel(
         ctx: discord.ApplicationContext,
         vc_id: discord.Option(
-            input_type=str, description='18桁のボイスチャンネルIDを入力してください。',
-            required=True, min_lengtth=18, max_length=18
+            input_type=str, description='18-19桁のボイスチャンネルIDを入力してください。',
+            required=True, min_lengtth=18, max_length=19
         )
     ):
         await ctx.respond(content=f'```cmd: vce_del_channel, vc_id: {vc_id}```', ephemeral=True)
