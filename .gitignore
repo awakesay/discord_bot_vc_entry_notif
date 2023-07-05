@@ -1,15 +1,13 @@
-/__pycache__
 
-# ボットのトークン設定ファイル
-# {
-#     "token": "{ここにトークン}"
-# }  
-/config/discord_bot.json
+# discord.json5
+#   {
+#       'bot_token': '{token here}'
+#   }
+/config/discord.json5
 
-# ランダムメッセージ
-# Discrodに追加・削除コマンドを追加したので、ローカル側を正とします。
-# [
-#     "{name}が{vc_name}に不法入国したようです。逮捕して！",
-#     "{name}、遂に「{vc_name}」デビュー！"
-# ]
-/config/rand_msg.json
+/db/*
+
+/lib/__pycache__
+
+# Macの隠しファイル
+.DS_Store
