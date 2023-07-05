@@ -1,4 +1,6 @@
 
+.vscode
+
 # discord.json5
 #   {
 #       'bot_token': '{token here}'
