@@ -1,239 +1,220 @@
-import os
-import json
+
+"""
+他の関数に切り出してEmbedを返す。
+"""
+
 import platform
 import random
-from typing import Union
 import discord
+from channel import Channel
+from discord_util import (
+    EmbedSuccess,
+    EmbedNotice,
+    EmbedFail,
+    EmbedChannelList,
+    EmbedMessagelList,
+    get_channel
+)
+from message import Message
+from util import get_bot_token
 
 def run_bot():
 
+    # IDテーブル
+    db_channel = Channel()
+    db_message = Message()
+
+    # ボット権限付与 & ボットオブジェクト生成
     intents = discord.Intents.all()
     intents.message_content = True
     bot = discord.Bot(intents=intents)
     
+    # ======================================================================
+    # Event functions.
     @bot.event
     async def on_ready():
-        """起動メッセージ"""
+        """起動イベント"""
+        # 起動メッセージ
         print(f'{"-"*30}\non_ready: discord_bot_vc_entry')
         print(f'python_version: {platform.python_version()}')
         print(f'pycord_version: {discord.__version__}')
+        # データ初期化
+        # TODO: データベース内のしかるべきテーブルを初期化
 
 
     @bot.event
-    async def on_voice_state_update(member, before, after):
-        """ボイスチャンネル入室通知"""
-        rand_msg = get_config_json('rand_msg')  # メッセージリスト取得
-        vc_tc = get_config_json('vc_tc')        # チャンネル設定取得
-        if before.channel != None:
-            return  # イベント前にVCに入ってたときは早期リターン
-        elif str(after.channel.id) not in vc_tc.keys():
-            return  # vc_tc.jsonに登録されていないチャンネルのときは早期リターン
-        elif member.bot:
-            return  # イベントを発生させたのがボットのときは早期リターン
-        else:
-            if member.nick == None:
-                member_name = member.name
-            else:
-                member_name = member.nick
-            msg = get_msg(rand_msg, member_name, after.channel.name)# 表示メッセージ取得
-            emb = discord.Embed(title=msg, color=0x2ecc71)          # Embedオブジェクト生成
-            channel_id = get_channel_id(vc_tc, after.channel.id)    # 投稿するテキストチャンネルID取得
-            channel = bot.get_channel(channel_id)                   # チャンネルIDからチャンネルオブジェクト取得
-            await channel.send(embed=emb)                           # 投稿
+    async def on_voice_state_update(
+        member: discord.Member,
+        before: discord.VoiceState,
+        after: discord.VoiceState
+    ):
+        """ボイスチャンネル入退室イベント"""
+        # 入室と移動を処理。
+        if after.channel is not None:
+
+            vctc_ids = db_channel.get_channel_list(member)
+            post_tc = [id[1] for id in vctc_ids if id[0] == str(after.channel.id)]
+
+            if len(post_tc) == 0:
+                return
+        
+            post_msg: str = db_message.get_random_message(member)
+            edit_msg: str = post_msg
+            post_msg = post_msg.replace('{name}', member.nick).replace('{vc_name}', after.channel.name)
+            edit_msg = edit_msg.replace('{name}', f'<@{member.id}>').replace('{vc_name}', f'<#{after.channel.id}>')
+            
+            # 
+            for tc_id in post_tc:
+                post_channel = bot.get_channel(int(tc_id))
+                msg = await post_channel.send(embed=EmbedSuccess(post_msg)) # IDのままだと通知が数値の羅列になるので、投稿はベタ書きメッセージ。
+                await msg.edit(embed=EmbedSuccess(edit_msg))                # その後、すぐにIDに書き換え。クライアントソフトで見るとエイリアスに入れ替わります。
+            
+    # ======================================================================
+    # Slash command functions.
     
-
     @bot.slash_command(description='VC入室時のメッセージ一覧を表示します。')
-    async def vce_msg_list(ctx: discord.ApplicationContext):
+    async def vce_message_list(ctx: discord.ApplicationContext):
         """メッセージ一覧を表示します。"""
-        await ctx.respond(content=f'```cmd: vce_msg_list```', ephemeral=True)
-        msg = ''
-        for i, message in enumerate(get_config_json('rand_msg')):
-            number = str(i).rjust(3, ' ')
-            msg += f'\n{number}: {message}'
-        await ctx.respond(content=f'```{msg}```', ephemeral=True)
+
+        records: list[tuple[str, str]] = db_message.get_message_list(ctx)
+
+        embed = EmbedMessagelList()
+        embed.init(ctx, records)
+        await ctx.respond(embed=embed, ephemeral=True)
 
 
-    @bot.slash_command(description='VC入室時のメッセージを追加します。')
-    async def vce_add_msg(
+    @bot.slash_command(description='ボイスチャンネル入室時の通知メッセージを追加します。')
+    async def vce_add_message(
         ctx: discord.ApplicationContext,
-        add_msg: discord.Option(str, required=True, description='{name}はユーザー名、{vc_name}はボイスチャンネル名に置換します。')
+        msg: discord.Option(str, required=True,
+            description='キーワード: {name} はユーザー名、 {vc_name} はボイスチャンネル名に置き換えます。')
     ):
-        """メッセージを追加します。"""
-        await ctx.respond(content=f'```cmd: vce_add_msg, args: {add_msg}```', ephemeral=True)
-        rand_msg = get_config_json('rand_msg')
-        rand_msg.append(add_msg)
-        res = set_config_json('rand_msg', rand_msg)
-        if res[0]:
-            await ctx.respond(content=f'```「{add_msg}」を追加しました。```', ephemeral=True)
-        else:
-            await ctx.respond(content=f'```エラーが発生しました。\n{res[1]}```', ephemeral=True)
+        """通知メッセージを追加します。"""
 
+        res = db_message.add_msg(ctx, msg)
 
-    @bot.slash_command(description='VC入室時のメッセージを削除します。')
-    async def vce_del_msg(
+        highlight_msg: str = msg.replace('{name}', '__`{name}`__').replace('{vc_name}', '__`{vc_name}`__')
+
+        match res:
+            case True:  # 追加成功
+                await ctx.respond(
+                    embed=EmbedSuccess(f'[**{highlight_msg}**]\nを通知メッセージリストに追加しました。'),
+                    ephemeral=True)
+            case False: # 既に登録済み
+                await ctx.respond(
+                    embed=EmbedNotice(f'[**{highlight_msg}**]\nは既に通知メッセージリストに存在します。'),
+                    ephemeral=True)
+            case None:  # エラー
+                await ctx.respond(
+                    embed=EmbedFail(f'[**{highlight_msg}**]\nを通知メッセージリストの追加に失敗しました。'),
+                    ephemeral=True)
+            
+
+    @bot.slash_command(description='ボイスチャンネル入室時の通知メッセージを削除します。')
+    async def vce_del_message(
         ctx: discord.ApplicationContext,
-        del_number: discord.Option(int, required=True, description='/vce_list コマンドで表示した番号を選択してください。（注意：最新の番号を確認）')
+        delete_key: discord.Option(str, required=True, description='削除キー。（ /vce_msg_list コマンドで確認できます。）')
     ):
-        """メッセージを削除します。"""
-        await ctx.respond(content=f'```cmd: vce_del_msg, args: {del_number}```', ephemeral=True)
-        rand_msg = get_config_json('rand_msg')
-        try:
-            del_msg = rand_msg.pop(del_number)
-        except IndexError:
-            await ctx.respond(content=f'```有効な番号を入力してください。```', ephemeral=True)
-            return
-        res = set_config_json('rand_msg', rand_msg)
-        if res[0]:
-            await ctx.respond(content=f'```「{del_msg}」を削除しました。```', ephemeral=True)
-        else:
-            await ctx.respond(content=f'```エラーが発生しました。\n{res[1]}```', ephemeral=True)
+        
+        res, msg = db_message.del_msg(delete_key)
+
+        highlight_msg: str = msg.replace('{name}', '__`{name}`__').replace('{vc_name}', '__`{vc_name}`__')
+
+        match res:
+            case True:  # 追加成功
+                await ctx.respond(
+                    embed=EmbedSuccess(f'[**{highlight_msg}**]\nを通知メッセージリストから削除しました。'),
+                    ephemeral=True)
+            case False: # 既に登録済み
+                await ctx.respond(
+                    embed=EmbedNotice(f'[**{highlight_msg}**]\nは既に通知メッセージリストから削除されています。'),
+                    ephemeral=True)
+            case None:  # エラー
+                await ctx.respond(
+                    embed=EmbedFail(f'[**{highlight_msg}**]\nを通知メッセージリストからの削除に失敗しました。'),
+                    ephemeral=True)
 
 
-    @bot.slash_command(description='VCとTCの紐付け一覧を表示します。（コマンド実行サーバーのみ）')
+    @bot.slash_command(description='ボイスチャンネルとテキストチャンネルの紐付け一覧を表示します。')
     async def vce_channel_list(ctx: discord.ApplicationContext):
-        """ボイスチャンネルとテキストチャンネルの紐付けリストを表示します。（投稿したサーバー内のみ）"""
-        await ctx.respond(content=f'```cmd: vce_channel_list```', ephemeral=True)
-        channels = get_detail_vctc(bot)
-        msg = ''
-        for i, ch in enumerate(channels):
-            sep = f'\n{"-"*30}\n' if msg != '' else ''
-            vc = f"vc: {ch['vc'].category.name}/{ch['vc'].name}"    # vcカテゴリー名/チャンネル名
-            tc = f"tc: {ch['tc'].category.name}/{ch['tc'].name}"    # tcカテゴリー名/チャンネル名
-            msg += f"{sep}{str(i).rjust(3, ' ')}: {vc}\n{str(i).rjust(3, ' ')}: {tc}"
-        await ctx.respond(content=f'```{msg}```', ephemeral=True)
+        """ボイスチャンネルとテキストチャンネルの紐付けリストを表示します。（コマンドを実行したサーバー内のみ）"""
+        #await ctx.respond(content=f'```cmd: vce_channel_list```', ephemeral=True)
+        
+        vctc_ids: list[tuple[int, int]] = db_channel.get_channel_list(ctx)
+
+        embed = EmbedChannelList()
+        embed.init(ctx, vctc_ids)
+        await ctx.respond(embed=embed, ephemeral=True)
 
 
     @bot.slash_command(description='ボイスチャンネルとテキストチャンネルを紐付けます。')
     async def vce_add_channel(
         ctx: discord.ApplicationContext,
-        vc_id: discord.Option(
-            input_type=str, description='18-19桁のボイスチャンネルIDを入力してください。',
-            required=True, min_length=18, max_length=19
-        ),
-        tc_id: discord.Option(
-            input_type=str,  description='18-19桁のテキストチャンネルIDを入力してください。',
-            required=True, min_length=18, max_length=19
-        )
+        vc_id: discord.Option(str, required=True,   
+                              description='ボイスチャンネルIDを入力してください。'),
+        tc_id: discord.Option(str, required=True,   
+                              description='テキストチャンネルIDを入力してください。')
     ):
-        """ボイスチャンネルとテキストチャンネルを紐つけます。（コマンド実行サーバーのみ。VCとTCは同一サーバー）"""
-        await ctx.respond(content=f'```cmd: vce_add_channel, vc_id: {vc_id}, tc_id: {tc_id}```', ephemeral=True)
-        res = add_channel(bot, vc_id, tc_id)
-        msg = '\n'.join([
-            'cmd: vce_add_channel',
-            f"vc_id: {vc_id}",
-            f"tc_id: {tc_id}",
-            f"result: {'失敗' if res['result'] == None else '成功'}",
-            f"msg: {res['msg']}"
-        ])
-        await ctx.respond(content=f'```{msg}```', ephemeral=True)
+        # IDチェック（Guild内のチャンネルに引数のIDが存在するか確認します。）
+        vc_channel_ids: list[int] = [str(channel.id) for channel in ctx.guild.channels if isinstance(channel, discord.VoiceChannel)]
+        tc_channel_ids: list[int] = [str(channel.id) for channel in ctx.guild.channels if isinstance(channel, discord.TextChannel)]
+        if vc_id not in vc_channel_ids or tc_id not in tc_channel_ids:
+            await ctx.respond(embed=EmbedFail('無効なチャンネルIDです。'),
+                              ephemeral=True)   # コマンド利用者だけが見える返信。
+            return
+        
+        # IDをデータベースに追加して、結果を取得する。
+        res: bool | None = db_channel.add_channel_ids(guild_id=str(ctx.guild.id), 
+                                                      voice_channel_id=vc_id, text_channel_id=tc_id)
+        
+        # ボイスチャンネルとテキストチャンネルのカテゴリIDを取得
+        vc_cat_id: str = get_channel(ctx, vc_id).category.id
+        tc_cat_id: str = get_channel(ctx, tc_id).category.id
+
+        # ユーザーへのメッセージ（結果で分岐）
+        match res:
+            case True:  # 追加成功
+                await ctx.respond(
+                    embed=EmbedSuccess(f'[<#{vc_cat_id}> / <#{vc_id}>] と [<#{tc_cat_id}> / <#{tc_id}>] を紐付けました。'),
+                    ephemeral=True)
+            case False: # 既に登録済み
+                await ctx.respond(
+                    embed=EmbedNotice(f'[<#{vc_cat_id}> / <#{vc_id}>] と [<#{tc_cat_id}> / <#{tc_id}>] は既に紐付いています。'),
+                    ephemeral=True)
+            case None:  # エラー
+                await ctx.respond(
+                    embed=EmbedFail(f'[<#{vc_cat_id}> / <#{vc_id}>] と [<#{tc_cat_id}> / <#{tc_id}>] の紐付けに失敗しました。'),
+                    ephemeral=True)
 
 
     @bot.slash_command(description='ボイスチャンネルとテキストチャンネルの紐付けを解除します。')
     async def vce_del_channel(
         ctx: discord.ApplicationContext,
-        vc_id: discord.Option(
-            input_type=str, description='18-19桁のボイスチャンネルIDを入力してください。',
+        delete_key: discord.Option(
+            input_type=str, description='削除キー。（ /vce_channel_list コマンドで確認できます。）',
             required=True, min_lengtth=18, max_length=19
         )
     ):
-        await ctx.respond(content=f'```cmd: vce_del_channel, vc_id: {vc_id}```', ephemeral=True)
-        res = del_channel(vc_id)
-        msg = '\n'.join([
-            'cmd: vce_del_channel',
-            f"vc_id: {vc_id}",
-            f"result: {'失敗' if res['result'] == None else '成功'}",
-            f"msg: {res['msg']}"
-        ])
-        await ctx.respond(content=f'```{msg}```', ephemeral=True)
+        # 削除キーのレコードをテーブルから削除して、成否とボイスチャンネルとテキストチャンネルを取得する。
+        res, vc, tc = db_channel.del_channel_ids(ctx, delete_key)
+
+        match res:
+            case True:  # 追加成功
+                await ctx.respond(
+                    embed=EmbedSuccess(f'[<#{vc.category.id}> / <#{vc.id}>] と [<#{tc.category.id}> / <#{tc.id}>] の紐付けを解除しました。'),
+                    ephemeral=True)
+            case False: # 既に登録済み
+                await ctx.respond(
+                    embed=EmbedNotice(f'無効な削除キーです。'),
+                    ephemeral=True)
+            case None:  # エラー
+                await ctx.respond(
+                    embed=EmbedFail(f'[<#{vc.category.id}> / <#{vc.id}>] と [<#{tc.category.id}> / <#{tc.id}>] の紐付けに失敗しました。'),
+                    ephemeral=True)
 
 
-    bot.run(get_config_json('discord_bot')['token'])
-
-
-def get_msg(rand_msg: list, name: str, vc_name: str) -> str:
-    """メッセージをランダムに選択し、名前とVC名を置換して返します。"""
-    raw_msg = random.sample(rand_msg, 1)[0]
-    return raw_msg.replace('{name}', name).replace('{vc_name}', vc_name)
-
-
-def get_channel_id(vc_tc: dict, vc: int) -> Union[int, None]:
-    """ボイスチャンネルIDに対応したテキストチャンネルIDを返します。"""
-    return vc_tc.get(str(vc), None)
-
-
-def get_detail_vctc(bot: discord.Bot) -> list[dict]:
-    """サーバーで利用しているVCとTCのチャンネルオブジェクトを返します。"""
-    vc_tc = get_config_json('vc_tc')
-    del vc_tc['str: voice_channel']
-    channels = []
-    for vc_str, tc_int in vc_tc.items():
-        vc = bot.get_channel(int(vc_str))
-        tc = bot.get_channel(tc_int)
-        if not (vc == None or tc == None):
-            channels.append({'vc': vc, 'tc': tc})
-    return channels
-
-
-def add_channel(bot: discord.Bot, vc_id: str, tc_id: str) -> dict:
-    """VCとTCの紐付けを追加して、結果を返します。"""
-    vc_tc = get_config_json('vc_tc')
-    vc = bot.get_channel(int(vc_id))    # voice_channelオブジェクト取得
-    tc = bot.get_channel(int(tc_id))    # text_channelオブジェクト取得
-    if vc == None:
-        return {'result': False, 'vc': vc, 'tc': tc,
-                'msg': 'vc_idからチャンネルを取得できません。無効な値です。'}
-    elif vc.type.name != 'voice':
-        return {'result': False, 'vc': vc, 'tc': tc,
-                'msg': 'vc_idはボイスチャンネルではありません。'}
-    elif tc == None:
-        return {'result': False, 'vc': vc, 'tc': tc,
-                'msg': 'tc_idからチャンネルを取得できません。無効な値です。'}
-    elif tc.type.name != 'text':
-        return {'result': False, 'vc': vc, 'tc': tc,
-                'msg': 'tc_idはテキストチャンネルではありません。'}
-    
-    vc_tc[vc_id] = int(tc_id)
-    res = set_config_json('vc_tc', vc_tc)
-    if res[0]:
-        return {'result': True, 'vc': vc, 'tc': tc,
-                'msg': 'vc_idとtc_idを紐付けしました。'}
-    else:
-        return {'result': False, 'vc': vc, 'tc': tc,
-                'msg': '書き込み中にエラーが発生しました。'}
-
-
-def del_channel(vc_id: str) -> dict:
-    """VCとTCの紐付けを解除して、結果を返します。"""
-    vc_tc = get_config_json('vc_tc')
-    try:
-        del vc_tc[vc_id]
-    except KeyError as e:
-        return {'result': False, 'msg': 'vc_idの値が見つかりません。'}
-    
-    res = set_config_json('vc_tc', vc_tc)
-    if res[0]:
-        return {'result': True, 'msg': 'vc_idの紐付けを解除しました。'}
-    else:
-        return {'result': True, 'msg': '書き込み中にエラーが発生しました。'}
-
-
-def get_config_json(name: str) -> Union[list, dict]:
-    """configフォルダ内の設定を取得して返します。"""
-    path = f'{os.path.abspath(os.path.dirname(__file__))}/config/{name}.json'
-    with open(path, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-
-def set_config_json(name: str, set_obj: Union[list, dict]) -> list[bool, str]:
-    """configフォルダ内に設定を書き込みます。"""
-    try:
-        path = f'{os.path.abspath(os.path.dirname(__file__))}/config/{name}.json'
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(set_obj, f, indent=4, ensure_ascii=False)
-            return True, ''
-    except Exception as e:
-            return False, str(e)
-
+    bot.run(get_bot_token())
 
 if __name__ == '__main__':
+
     run_bot()
