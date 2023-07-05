@@ -6,8 +6,11 @@
 #       'bot_token': '{token here}'
 #   }
 /config/discord.json5
+!/db/.gitkeep
+
 
 /db/*
+!/db/.gitkeep
 
 /lib/__pycache__
 
