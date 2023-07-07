@@ -132,7 +132,7 @@ class Message():
         '''
         self._cur.execute(guild_msg_sql)
         records: list = self._cur.fetchall()
-        return 
+        return records
 
     def get_random_message(self, member: discord.Member) -> str:
 

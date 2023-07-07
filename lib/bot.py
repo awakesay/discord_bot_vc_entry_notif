@@ -15,6 +15,7 @@ from discord_util import (
     EmbedMessagelList,
     get_channel
 )
+from discord_util import DeleteButton
 from message import Message
 from util import get_bot_token
 
@@ -93,7 +94,7 @@ def run_bot():
 
         res = db_message.add_msg(ctx, msg)
 
-        highlight_msg: str = msg.replace('{name}', '__`{name}`__').replace('{vc_name}', '__`{vc_name}`__')
+        highlight_msg: str = msg.replace('{name}', '{name}').replace('{vc_name}', '{vc_name}')
 
         match res:
             case True:  # 追加成功

@@ -9,7 +9,7 @@
 !/db/.gitkeep
 
 
-/db/*
+# /db/*
 !/db/.gitkeep
 
 /lib/__pycache__

@@ -47,7 +47,7 @@ class EmbedMessagelList(Embed):
         """"""
         self.description = ' 通知メッセージの一覧を表示します。'
         for i, record in enumerate(records, 1):
-            highlight_msg: str = record[0].replace('{name}', '__`{name}`__').replace('{vc_name}', '__`{vc_name}`__')
+            highlight_msg: str = record[0].replace('{name}', '{name}').replace('{vc_name}', '{vc_name}')
             msg_str = f'{i}\t: **{highlight_msg}**'
             del_cmd: str = f'`削除コマンド -> /vce_del_message delete_key:{record[1]}`'
             self.add_field(name=msg_str, value=del_cmd, inline=False)
@@ -63,6 +63,16 @@ class EmbedVCEntryMsg(Embed):
             color=Color.green()
             **kwargs
         )
+
+class DeleteButton(discord.ui.View):
+    @discord.ui.button(label='削除', style=discord.ButtonStyle.red)
+    async def button_callback(
+        self,
+        button: discord.Button,
+        interaction: discord.interactions.Interaction
+    ):
+        await interaction.message.delete()
+
 
 def get_channel(
     ctx: discord.ApplicationContext,
