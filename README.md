@@ -1,20 +1,18 @@
 # Discord_bot_vc_entry
 
 ## 概要
-    - Discordのボイスチャンネルに誰かが入ると、テキストチャンネルに通知してくれるボットです。
+Discordのボットです。
+誰かがボイスチャンネルに入ると、テキストチャンネルに投稿します。
 
-## 動作環境
-    - PC: Raspberry Pi 4
-    - OS: Raspberry Pi OS
-    - Lang: Python 3.9.2
-        - Package: pycord
-
+## 環境
+    - Python3.11^
+        - py-cord, json5
+    
 ## 事前準備
-    - Discord bot APIキー（/config/discord_bot.jsonにセット)
-        - ボットの導入方法は省略
+    - Discord botのAPIトークンを`./config/discord_bot.json5`の`bot_token`にセット。
 
 ## 外部サービス
     - Discord API
 
 ## 利用方法
-    - /vce_add_channelコマンドでボイスチャンネルとテキストチャンネルを紐付けする。
+    - /voice_entry_ ... から始まるコマンドを利用して操作する。
