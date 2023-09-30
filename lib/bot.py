@@ -1,221 +1,139 @@
 
-"""
-他の関数に切り出してEmbedを返す。
-"""
+
 
 import platform
-import random
+from typing import Any, Final
 import discord
-from channel import Channel
-from discord_util import (
-    EmbedSuccess,
-    EmbedNotice,
-    EmbedFail,
-    EmbedChannelList,
-    EmbedMessagelList,
-    get_channel
-)
-from discord_util import DeleteButton
-from message import Message
+from channel import Channel, ReturnStatus, Successfully, AlreadyAdded
 from util import get_bot_token
+
+VC_ENTRY_POST_TEXT: Final[str] = f'<username> has joined \
+                                  the <voice_channel> voice channel.'
 
 def run_bot():
 
-    # IDテーブル
     db_channel = Channel()
-    db_message = Message()
 
-    # ボット権限付与 & ボットオブジェクト生成
+    # 面倒なので権限関係は調べてません。とりあえず全権を与えといてください。
+    # ボットには`Intents`を付与しておいてください。
     intents = discord.Intents.all()
     intents.message_content = True
     bot = discord.Bot(intents=intents)
     
-    # ======================================================================
-    # Event functions.
+    # Event functions =========================================================
+
     @bot.event
     async def on_ready():
         """起動イベント"""
-        # 起動メッセージ
-        print(f'{"-"*30}\non_ready: discord_bot_vc_entry')
-        print(f'python_version: {platform.python_version()}')
-        print(f'pycord_version: {discord.__version__}')
-        # データ初期化
-        # TODO: データベース内のしかるべきテーブルを初期化
-
+        # 起動メッセージ表示
+        launch_message: list[str] = [
+            'discord_bot_vc_entry_notif',
+            f'python_version: {platform.python_version()}',
+            f'pycord_version: {discord.__version__}'
+        ]
+        max_length: int = max(len(s) for s in launch_message)
+        sep: str = '-' * max_length + '\n'
+        print(sep + '\n'.join(launch_message) + '\n' + sep)
 
     @bot.event
-    async def on_voice_state_update(
-        member: discord.Member,
-        before: discord.VoiceState,
-        after: discord.VoiceState
-    ):
-        """ボイスチャンネル入退室イベント"""
-        # 入室と移動を処理。
-        if after.channel is not None:
-
-            vctc_ids = db_channel.get_channel_list(member)
-            post_tc = [id[1] for id in vctc_ids if id[0] == str(after.channel.id)]
-
-            if len(post_tc) == 0:
-                return
-        
-            post_msg: str = db_message.get_random_message(member)
-            edit_msg: str = post_msg
-            post_msg = post_msg.replace('{name}', member.nick).replace('{vc_name}', after.channel.name)
-            edit_msg = edit_msg.replace('{name}', f'<@{member.id}>').replace('{vc_name}', f'<#{after.channel.id}>')
-            
-            # 
-            for tc_id in post_tc:
-                post_channel = bot.get_channel(int(tc_id))
-                msg = await post_channel.send(embed=EmbedSuccess(post_msg)) # IDのままだと通知が数値の羅列になるので、投稿はベタ書きメッセージ。
-                await msg.edit(embed=EmbedSuccess(edit_msg))                # その後、すぐにIDに書き換え。クライアントソフトで見るとエイリアスに入れ替わります。
-            
-    # ======================================================================
-    # Slash command functions.
-    
-    @bot.slash_command(description='VC入室時のメッセージ一覧を表示します。')
-    async def vce_message_list(ctx: discord.ApplicationContext):
-        """メッセージ一覧を表示します。"""
-
-        records: list[tuple[str, str]] = db_message.get_message_list(ctx)
-
-        embed = EmbedMessagelList()
-        embed.init(ctx, records)
-        await ctx.respond(embed=embed, ephemeral=True)
-
-
-    @bot.slash_command(description='ボイスチャンネル入室時の通知メッセージを追加します。')
-    async def vce_add_message(
-        ctx: discord.ApplicationContext,
-        msg: discord.Option(str, required=True,
-            description='キーワード: {name} はユーザー名、 {vc_name} はボイスチャンネル名に置き換えます。')
-    ):
-        """通知メッセージを追加します。"""
-
-        res = db_message.add_msg(ctx, msg)
-
-        highlight_msg: str = msg.replace('{name}', '{name}').replace('{vc_name}', '{vc_name}')
-
-        match res:
-            case True:  # 追加成功
-                await ctx.respond(
-                    embed=EmbedSuccess(f'[**{highlight_msg}**]\nを通知メッセージリストに追加しました。'),
-                    ephemeral=True)
-            case False: # 既に登録済み
-                await ctx.respond(
-                    embed=EmbedNotice(f'[**{highlight_msg}**]\nは既に通知メッセージリストに存在します。'),
-                    ephemeral=True)
-            case None:  # エラー
-                await ctx.respond(
-                    embed=EmbedFail(f'[**{highlight_msg}**]\nを通知メッセージリストの追加に失敗しました。'),
-                    ephemeral=True)
-            
-
-    @bot.slash_command(description='ボイスチャンネル入室時の通知メッセージを削除します。')
-    async def vce_del_message(
-        ctx: discord.ApplicationContext,
-        delete_key: discord.Option(str, required=True, description='削除キー。（ /vce_msg_list コマンドで確認できます。）')
-    ):
-        
-        res, msg = db_message.del_msg(delete_key)
-
-        highlight_msg: str = msg.replace('{name}', '__`{name}`__').replace('{vc_name}', '__`{vc_name}`__')
-
-        match res:
-            case True:  # 追加成功
-                await ctx.respond(
-                    embed=EmbedSuccess(f'[**{highlight_msg}**]\nを通知メッセージリストから削除しました。'),
-                    ephemeral=True)
-            case False: # 既に登録済み
-                await ctx.respond(
-                    embed=EmbedNotice(f'[**{highlight_msg}**]\nは既に通知メッセージリストから削除されています。'),
-                    ephemeral=True)
-            case None:  # エラー
-                await ctx.respond(
-                    embed=EmbedFail(f'[**{highlight_msg}**]\nを通知メッセージリストからの削除に失敗しました。'),
-                    ephemeral=True)
-
-
-    @bot.slash_command(description='ボイスチャンネルとテキストチャンネルの紐付け一覧を表示します。')
-    async def vce_channel_list(ctx: discord.ApplicationContext):
-        """ボイスチャンネルとテキストチャンネルの紐付けリストを表示します。（コマンドを実行したサーバー内のみ）"""
-        #await ctx.respond(content=f'```cmd: vce_channel_list```', ephemeral=True)
-        
-        vctc_ids: list[tuple[int, int]] = db_channel.get_channel_list(ctx)
-
-        embed = EmbedChannelList()
-        embed.init(ctx, vctc_ids)
-        await ctx.respond(embed=embed, ephemeral=True)
-
-
-    @bot.slash_command(description='ボイスチャンネルとテキストチャンネルを紐付けます。')
-    async def vce_add_channel(
-        ctx: discord.ApplicationContext,
-        vc_id: discord.Option(str, required=True,   
-                              description='ボイスチャンネルIDを入力してください。'),
-        tc_id: discord.Option(str, required=True,   
-                              description='テキストチャンネルIDを入力してください。')
-    ):
-        # IDチェック（Guild内のチャンネルに引数のIDが存在するか確認します。）
-        vc_channel_ids: list[int] = [str(channel.id) for channel in ctx.guild.channels if isinstance(channel, discord.VoiceChannel)]
-        tc_channel_ids: list[int] = [str(channel.id) for channel in ctx.guild.channels if isinstance(channel, discord.TextChannel)]
-        if vc_id not in vc_channel_ids or tc_id not in tc_channel_ids:
-            await ctx.respond(embed=EmbedFail('無効なチャンネルIDです。'),
-                              ephemeral=True)   # コマンド利用者だけが見える返信。
+    async def on_voice_state_update(member: discord.Member, 
+                                    before: discord.VoiceState,
+                                    after: discord.VoiceState):
+        """ボイスチャンネル状態変化イベント"""
+        if after.channel is None:   # 退出
+            return          
+        elif member.bot:            # ボット
+            return
+        register_records: list = db_channel.get_records_by_voice_channel_id(str(after.channel.id))
+        if len(register_records) == 0:
             return
         
-        # IDをデータベースに追加して、結果を取得する。
-        res: bool | None = db_channel.add_channel_ids(guild_id=str(ctx.guild.id), 
-                                                      voice_channel_id=vc_id, text_channel_id=tc_id)
+        post_description: str = VC_ENTRY_POST_TEXT.replace('<username>', member.nick) \
+                                                  .replace('<voice_channel>', after.channel.name)
+        edit_description: str = VC_ENTRY_POST_TEXT.replace('<username>', discord_notation(member, True)) \
+                                                  .replace('<voice_channel>', discord_notation(after.channel))
+        post_embed = discord.Embed(colour=discord.Color.green(), description=post_description)
+        edit_embed = discord.Embed(colour=discord.Color.green(), description=edit_description)
+        for text_channel_id in [int(record['TEXT_CHANNEL_ID']) for record in register_records]:
+            post_channel: discord.TextChannel = bot.get_channel(text_channel_id)
+            post_message = await post_channel.send(embed=post_embed)
+            await post_message.edit(embed=edit_embed)
+    
+    # Slash command functions =================================================
+
+    @bot.slash_command(description='Add voice and text channel.')
+    async def voice_entry_add_channel(ctx: discord.ApplicationContext,
+                                      voice_channel_id: discord.Option(
+                                          str, required=True, description='Enter voice channel id.'),
+                                      text_channel_id: discord.Option(
+                                          str, required=True, description='Enter text channel id.')):
+        voice_channel_ids: list[str] = [str(ch.id) for ch in ctx.guild.channels if isinstance(ch, discord.VoiceChannel)]
+        text_channel_ids: list[str] = [str(ch.id) for ch in ctx.guild.channels if isinstance(ch, discord.TextChannel)]
+        is_valid_voice_channel: bool = voice_channel_id in voice_channel_ids
+        is_valid_text_channel: bool = text_channel_id in text_channel_ids
+        if not all((is_valid_voice_channel, is_valid_text_channel)):
+            failed_embed = discord.Embed(colour=discord.Colour.red(), description='Invalid channel id.')
+            await ctx.respond(embed=failed_embed, ephemeral=True)
+            return
         
-        # ボイスチャンネルとテキストチャンネルのカテゴリIDを取得
-        vc_cat_id: str = get_channel(ctx, vc_id).category.id
-        tc_cat_id: str = get_channel(ctx, tc_id).category.id
+        response: ReturnStatus = db_channel.add_channel_id(ctx.guild.id, voice_channel_id, text_channel_id)
+        if isinstance(response, Successfully):
+            response_embed = discord.Embed(colour=discord.Colour.green(), description='Added channel.')
+        elif isinstance(response, AlreadyAdded):
+            response_embed = discord.Embed(colour=discord.Colour.yellow(), description='Channel has already been added.')
+        await ctx.respond(embed=response_embed, ephemeral=True)
+    
+    @bot.slash_command(description='remove voice and text channel.')
+    async def voice_entry_remove_channel(ctx: discord.ApplicationContext,
+                                         delete_key: discord.Option(str, required=True, 
+                                                                         description='Enter delete key. Check list.')):
+        records: list = db_channel.get_records_by_guild_id_and_delete_key(ctx.guild.id, delete_key)
+        if len(records) == 0:
+            post_embed = discord.Embed(colour=discord.Colour.yellow(), description='Not found delete key.')
+            await ctx.respond(embed=post_embed, ephemeral=True)
+            return
+        elif len(records) == 1:
+            record = db_channel.del_channel_id(delete_key)[0]
+            voice_channel: discord.VoiceChannel = bot.get_channel(int(record['VOICE_CHANNEL_ID']))
+            text_channel: discord.TextChannel = bot.get_channel(int(record['TEXT_CHANNEL_ID']))
+            post_embed = discord.Embed(colour=discord.Colour.yellow(), description='Channel deleted.')
+            post_embed.add_field(name='Voice channel', value=discord_notation(voice_channel), inline=False)
+            post_embed.add_field(name='Text channel', value=discord_notation(text_channel), inline=False)
+            await ctx.respond(embed=post_embed, ephemeral=True)
 
-        # ユーザーへのメッセージ（結果で分岐）
-        match res:
-            case True:  # 追加成功
-                await ctx.respond(
-                    embed=EmbedSuccess(f'[<#{vc_cat_id}> / <#{vc_id}>] と [<#{tc_cat_id}> / <#{tc_id}>] を紐付けました。'),
-                    ephemeral=True)
-            case False: # 既に登録済み
-                await ctx.respond(
-                    embed=EmbedNotice(f'[<#{vc_cat_id}> / <#{vc_id}>] と [<#{tc_cat_id}> / <#{tc_id}>] は既に紐付いています。'),
-                    ephemeral=True)
-            case None:  # エラー
-                await ctx.respond(
-                    embed=EmbedFail(f'[<#{vc_cat_id}> / <#{vc_id}>] と [<#{tc_cat_id}> / <#{tc_id}>] の紐付けに失敗しました。'),
-                    ephemeral=True)
-
-
-    @bot.slash_command(description='ボイスチャンネルとテキストチャンネルの紐付けを解除します。')
-    async def vce_del_channel(
-        ctx: discord.ApplicationContext,
-        delete_key: discord.Option(
-            input_type=str, description='削除キー。（ /vce_channel_list コマンドで確認できます。）',
-            required=True, min_lengtth=18, max_length=19
-        )
-    ):
-        # 削除キーのレコードをテーブルから削除して、成否とボイスチャンネルとテキストチャンネルを取得する。
-        res, vc, tc = db_channel.del_channel_ids(ctx, delete_key)
-
-        match res:
-            case True:  # 追加成功
-                await ctx.respond(
-                    embed=EmbedSuccess(f'[<#{vc.category.id}> / <#{vc.id}>] と [<#{tc.category.id}> / <#{tc.id}>] の紐付けを解除しました。'),
-                    ephemeral=True)
-            case False: # 既に登録済み
-                await ctx.respond(
-                    embed=EmbedNotice(f'無効な削除キーです。'),
-                    ephemeral=True)
-            case None:  # エラー
-                await ctx.respond(
-                    embed=EmbedFail(f'[<#{vc.category.id}> / <#{vc.id}>] と [<#{tc.category.id}> / <#{tc.id}>] の紐付けに失敗しました。'),
-                    ephemeral=True)
-
+    @bot.slash_command(description='Display channel list.')
+    async def voice_entry_channel_list(ctx: discord.ApplicationContext):
+        """ボイスチャンネルとテキストチャンネルの紐付けリストを表示します。（コマンドを実行したサーバー内のみ）"""
+        records = db_channel.get_records_by_guild_id(ctx.guild.id)
+        post_embed = discord.Embed(colour=discord.Colour.green(), description='Channel list.')
+        for record in records:
+            voice_channel = bot.get_channel(int(record['VOICE_CHANNEL_ID']))
+            text_channel = bot.get_channel(int(record['TEXT_CHANNEL_ID']))
+            post_embed.add_field(name=f'{discord_notation(voice_channel.category)}.{discord_notation(voice_channel)}' \
+                                    + f'\t->\t{discord_notation(text_channel.category)}.{discord_notation(text_channel)}',
+                                 value=f'\tDelete_key: {record["DELETE_KEY"]}')
+        await ctx.respond(embed=post_embed, ephemeral=True)
 
     bot.run(get_bot_token())
 
+
+# Common funcions =============================================================
+
+def discord_notation(obj: Any | None = None, is_member: bool = False) -> str:
+    """Discordの表記に変更します。"""
+    if obj is None or not hasattr(obj, 'id'):
+        if is_member:
+            return '<@0>'
+        else:
+            return '<#0>'
+    
+    match obj.__class__:
+        case discord.Member:
+            prefix = '@'
+        case _:
+            prefix = '#'
+    return f'<{prefix}{obj.id}>'
+    
 if __name__ == '__main__':
 
     run_bot()
