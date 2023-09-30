@@ -1,18 +1,12 @@
 
-.vscode
+# Python仮想環境
+.venv       
 
-# discord.json5
-#   {
-#       'bot_token': '{token here}'
-#   }
-/config/discord.json5
-!/db/.gitkeep
-
-
-# /db/*
-!/db/.gitkeep
-
+# Pythonキャッシュ
 /lib/__pycache__
 
 # Macの隠しファイル
-.DS_Store
+.DS_Store   
+
+# 秘密のテキストファイル
+ignore.txt
