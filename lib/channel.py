@@ -33,7 +33,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Final, Union
-from util import app_root
+from utils import app_root
 
 SQLITE3_DIR: Final[Path] = app_root('database')
 
