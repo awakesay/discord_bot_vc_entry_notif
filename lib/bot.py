@@ -7,8 +7,8 @@ import discord
 from channel import Channel, ReturnStatus, Successfully, AlreadyAdded
 from utils import get_bot_token
 
-VC_ENTRY_POST_TEXT: Final[str] = f'<username> has joined \
-                                  the <voice_channel> voice channel.'
+VC_ENTRY_POST_TEXT: Final[str] = '<username> has joined ' \
+                               + 'the <voice_channel> voice channel.'
 
 def run_bot():
 
@@ -61,47 +61,55 @@ def run_bot():
     
     # Slash command functions =================================================
 
-    @bot.slash_command(description='Add voice and text channel.')
+    @bot.slash_command(description='Add links for voice and text channels.')
     async def voice_entry_add_channel(ctx: discord.ApplicationContext,
                                       voice_channel_id: discord.Option(
-                                          str, required=True, description='Enter voice channel id.'),
+                                          str, required=True, description='Please enter the voice channel ID.'),
                                       text_channel_id: discord.Option(
-                                          str, required=True, description='Enter text channel id.')):
+                                          str, required=True, description='Please enter the text channel ID.')):
         voice_channel_ids: list[str] = [str(ch.id) for ch in ctx.guild.channels if isinstance(ch, discord.VoiceChannel)]
         text_channel_ids: list[str] = [str(ch.id) for ch in ctx.guild.channels if isinstance(ch, discord.TextChannel)]
         is_valid_voice_channel: bool = voice_channel_id in voice_channel_ids
         is_valid_text_channel: bool = text_channel_id in text_channel_ids
         if not all((is_valid_voice_channel, is_valid_text_channel)):
-            failed_embed = discord.Embed(colour=discord.Colour.red(), description='Invalid channel id.')
+            failed_embed = discord.Embed(colour=discord.Colour.red(), description='Cannot be added. Invalid ID.')
             await ctx.respond(embed=failed_embed, ephemeral=True)
             return
         
         response: ReturnStatus = db_channel.add_channel_id(ctx.guild.id, voice_channel_id, text_channel_id)
+        voice_channel = bot.get_channel(int(voice_channel_id))
+        text_channel = bot.get_channel(int(text_channel_id))
         if isinstance(response, Successfully):
-            response_embed = discord.Embed(colour=discord.Colour.green(), description='Added channel.')
+            response_embed = discord.Embed(colour=discord.Colour.green(), description='Added channel ID.')
         elif isinstance(response, AlreadyAdded):
-            response_embed = discord.Embed(colour=discord.Colour.yellow(), description='Channel has already been added.')
+            response_embed = discord.Embed(colour=discord.Colour.yellow(), description='Channel ID has already been added.')
+        response_embed.add_field(name='Voice channel', inline=False,
+                                 value=f'{discord_notation(voice_channel.category)}.{discord_notation(voice_channel)}')
+        response_embed.add_field(name='Text channel', inline=False,
+                                 value=f'{discord_notation(text_channel.category)}.{discord_notation(text_channel)}')
         await ctx.respond(embed=response_embed, ephemeral=True)
     
     @bot.slash_command(description='remove voice and text channel.')
-    async def voice_entry_remove_channel(ctx: discord.ApplicationContext,
+    async def voice_entry_delete_channel(ctx: discord.ApplicationContext,
                                          delete_key: discord.Option(str, required=True, 
-                                                                         description='Enter delete key. Check list.')):
+                                                                    description='Delete the link between voice and text channels.')):
         records: list = db_channel.get_records_by_guild_id_and_delete_key(ctx.guild.id, delete_key)
         if len(records) == 0:
-            post_embed = discord.Embed(colour=discord.Colour.yellow(), description='Not found delete key.')
+            post_embed = discord.Embed(colour=discord.Colour.yellow(), description='Invalid delete key.')
             await ctx.respond(embed=post_embed, ephemeral=True)
             return
         elif len(records) == 1:
             record = db_channel.del_channel_id(delete_key)[0]
             voice_channel: discord.VoiceChannel = bot.get_channel(int(record['VOICE_CHANNEL_ID']))
             text_channel: discord.TextChannel = bot.get_channel(int(record['TEXT_CHANNEL_ID']))
-            post_embed = discord.Embed(colour=discord.Colour.yellow(), description='Channel deleted.')
-            post_embed.add_field(name='Voice channel', value=discord_notation(voice_channel), inline=False)
-            post_embed.add_field(name='Text channel', value=discord_notation(text_channel), inline=False)
+            post_embed = discord.Embed(colour=discord.Colour.yellow(), description='It has been deleted.')
+            post_embed.add_field(name='Voice channel', inline=False,
+                                 value=f'{discord_notation(voice_channel.category)}.{discord_notation(voice_channel)}')
+            post_embed.add_field(name='Text channel', inline=False,
+                                 value=f'{discord_notation(text_channel.category)}.{discord_notation(text_channel)}')
             await ctx.respond(embed=post_embed, ephemeral=True)
 
-    @bot.slash_command(description='Display channel list.')
+    @bot.slash_command(description='Displays the list of added channels.')
     async def voice_entry_channel_list(ctx: discord.ApplicationContext):
         """ボイスチャンネルとテキストチャンネルの紐付けリストを表示します。（コマンドを実行したサーバー内のみ）"""
         records = db_channel.get_records_by_guild_id(ctx.guild.id)
@@ -111,7 +119,7 @@ def run_bot():
             text_channel = bot.get_channel(int(record['TEXT_CHANNEL_ID']))
             post_embed.add_field(name=f'{discord_notation(voice_channel.category)}.{discord_notation(voice_channel)}' \
                                     + f'\t->\t{discord_notation(text_channel.category)}.{discord_notation(text_channel)}',
-                                 value=f'\tDelete_key: {record["DELETE_KEY"]}')
+                                 value=f'Delete key: {record["DELETE_KEY"]}', inline=False)
         await ctx.respond(embed=post_embed, ephemeral=True)
 
     bot.run(get_bot_token())
