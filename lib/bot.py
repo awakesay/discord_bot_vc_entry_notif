@@ -5,7 +5,7 @@ import platform
 from typing import Any, Final, Union
 import discord
 from channel import Channel, ReturnStatus, Successfully, AlreadyAdded
-from util import get_bot_token
+from utils import get_bot_token
 
 VC_ENTRY_POST_TEXT: Final[str] = f'<username> has joined \
                                   the <voice_channel> voice channel.'
