@@ -91,7 +91,7 @@ class Channel():
                        voice_channel_id: Union[int, str], text_channel_id: Union[int, str]) -> ReturnStatus:
         """ギルトID、ボイスチャンネルID、テキストチャンネルIDを登録します。
         ここで削除キーを付与します。重複登録は無視されます。"""
-        exists_record_statement: str = self.SELECT_STATEMENT.replace(
+        statement: str = self.SELECT_STATEMENT.replace(
             '<placeholder>', 
             '''WHERE GUILD_ID = :guild_id
             AND VOICE_CHANNEL_ID = :voice_channel_id
@@ -103,7 +103,7 @@ class Channel():
             'text_channel_id': str(text_channel_id)
         }
         try:
-            self.cursor.execute(exists_record_statement, parameters)
+            self.cursor.execute(statement, parameters)
             if len(self.cursor.fetchall()) == 0:
                 parameters['delete_key'] = self._generate_delete_key()
                 self.cursor.execute(self.INSERT_STATEMENT, parameters)
@@ -117,9 +117,9 @@ class Channel():
     def del_channel_id(self, delete_key: str) -> list:
         """削除キーをキーにレコードを削除して、削除したレコードを返します。"""
         # DELETE文では削除したレコードを取得できないので、予め取得しておく。
-        select_statement: str = self.SELECT_STATEMENT.replace(
+        statement: str = self.SELECT_STATEMENT.replace(
                                 '<placeholder>', 'WHERE DELETE_KEY = :delete_key')
-        self.cursor.execute(select_statement, {'delete_key': delete_key})    
+        self.cursor.execute(statement, {'delete_key': delete_key})    
         delete_records: list = self.cursor.fetchall()
         self.cursor.execute(self.DELETE_STATEMENT, {'delete_key': delete_key})
         self.connection.commit()
@@ -162,10 +162,10 @@ class Channel():
 
     def _generate_delete_key(self) -> str:
         """テーブルにない削除キーを生成して返します。"""
-        delete_key_count_statement: str = f'SELECT DELETE_KEY FROM {self.TABLE_NAME} WHERE DELETE_KEY = :delete_key'
+        statement: str = f'SELECT DELETE_KEY FROM {self.TABLE_NAME} WHERE DELETE_KEY = :delete_key'
         while True:
             generate_delete_key: str = hashlib.sha256(str(datetime.now()).encode()).hexdigest()[:4]
-            self.cursor.execute(delete_key_count_statement, {'delete_key': generate_delete_key})
+            self.cursor.execute(statement, {'delete_key': generate_delete_key})
             if len(self.cursor.fetchall()) == 0:
                 return generate_delete_key
             
