@@ -1,0 +1,5 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe"
+}
+
+//"C:/Users/awake/AppData/Local/Programs/Python/Python39/python.exe"

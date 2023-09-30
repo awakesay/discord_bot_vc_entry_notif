@@ -8,5 +8,7 @@
 # Macの隠しファイル
 .DS_Store   
 
+/config/discord.json5
+
 # 秘密のテキストファイル
 ignore.txt

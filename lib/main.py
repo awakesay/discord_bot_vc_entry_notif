@@ -7,7 +7,5 @@ pythonプログラムのエントリーポイントです。
 """
 
 from bot import run_bot
-
-def main():
-    
-    run_bot()
+ 
+run_bot()

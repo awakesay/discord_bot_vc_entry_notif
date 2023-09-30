@@ -127,7 +127,7 @@ def discord_notation(obj: Union[Any, None] = None, is_member: bool = False) -> s
         else:
             return '<#0>'
     
-    if isinstance(obj.__class__, discord.Member):
+    if isinstance(obj, discord.Member):
         prefix = '@'
     else:
         prefix = '#'
