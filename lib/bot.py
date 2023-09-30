@@ -2,7 +2,7 @@
 
 
 import platform
-from typing import Any, Final
+from typing import Any, Final, Union
 import discord
 from channel import Channel, ReturnStatus, Successfully, AlreadyAdded
 from util import get_bot_token
@@ -119,7 +119,7 @@ def run_bot():
 
 # Common funcions =============================================================
 
-def discord_notation(obj: Any | None = None, is_member: bool = False) -> str:
+def discord_notation(obj: Union[Any, None] = None, is_member: bool = False) -> str:
     """Discordの表記に変更します。"""
     if obj is None or not hasattr(obj, 'id'):
         if is_member:
@@ -127,11 +127,11 @@ def discord_notation(obj: Any | None = None, is_member: bool = False) -> str:
         else:
             return '<#0>'
     
-    match obj.__class__:
-        case discord.Member:
-            prefix = '@'
-        case _:
-            prefix = '#'
+    if isinstance(obj.__class__, discord.Member):
+        prefix = '@'
+    else:
+        prefix = '#'
+
     return f'<{prefix}{obj.id}>'
     
 if __name__ == '__main__':
