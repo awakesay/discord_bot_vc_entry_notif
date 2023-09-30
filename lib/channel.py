@@ -32,7 +32,7 @@ import hashlib
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Final
+from typing import Final, Union
 from util import app_root
 
 SQLITE3_DIR: Final[Path] = app_root('database')
@@ -87,8 +87,8 @@ class Channel():
         self.cursor.close()
         self.connection.close()
 
-    def add_channel_id(self, guild_id: int | str, 
-                       voice_channel_id: int | str, text_channel_id: int | str) -> ReturnStatus:
+    def add_channel_id(self, guild_id: Union[int, str], 
+                       voice_channel_id: Union[int, str], text_channel_id: Union[int, str]) -> ReturnStatus:
         """ギルトID、ボイスチャンネルID、テキストチャンネルIDを登録します。
         ここで削除キーを付与します。重複登録は無視されます。"""
         exists_record_statement: str = self.SELECT_STATEMENT.replace(
@@ -125,14 +125,14 @@ class Channel():
         self.connection.commit()
         return delete_records
 
-    def get_records_by_guild_id(self, guild_id: int | str) -> list:
+    def get_records_by_guild_id(self, guild_id: Union[int, str]) -> list:
         """ギルドIDから登録されているレコードを返します。"""        
         statement: str = self.SELECT_STATEMENT.replace(
                          '<placeholder>', 'WHERE GUILD_ID = :guild_id')
         self.cursor.execute(statement, {'guild_id': str(guild_id)})
         return self.cursor.fetchall()
     
-    def get_records_by_voice_channel_id(self, voice_channel_id: int | str) -> list:
+    def get_records_by_voice_channel_id(self, voice_channel_id: Union[int, str]) -> list:
         """ボイスチャンネルIDから登録されているレコードを返します。"""
         statement: str = self.SELECT_STATEMENT.replace(
                          '<placeholder>', 'WHERE VOICE_CHANNEL_ID = :voice_channel_id')
@@ -146,7 +146,7 @@ class Channel():
         self.cursor.execute(statement, {'delete_key': delete_key})
         return self.cursor.fetchall()
 
-    def get_records_by_guild_id_and_delete_key(self, guild_id: int | str, delete_key: str) -> list:
+    def get_records_by_guild_id_and_delete_key(self, guild_id: Union[int, str], delete_key: str) -> list:
         """ギルドIDと削除キーから登録されているレコードを返します。"""        
         statement: str = self.SELECT_STATEMENT.replace(
                          '<placeholder>', 'WHERE GUILD_ID = :guild_id AND DELETE_KEY = :delete_key')
