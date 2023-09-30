@@ -1,13 +1,16 @@
 
 """
 パス
-    ./db/channel.sqlite3
+    ../database/channel.sqlite3
+
+テーブル名
+    REGISTER_CHANNEL
 
 カラム
-    GUILD_ID    サーバーID
-    VC_ID       ボイスチャンネルID
-    TC_ID       テキストチャンネルID
-    DEL_KEY     削除キー 時間を利用したランダムSHA256ハッシュ値の先頭4桁。既存の削除キーとの衝突禁止。
+    GUILD_ID          : サーバーID
+    VOICE_CHANNEL_ID  : ボイスチャンネルID
+    TEXT_CHANNEL_ID   : テキストチャンネルID
+    DELETE_KEY        : 削除キー 時間を利用したランダムSHA256ハッシュ値の先頭4桁。既存の削除キーとの衝突禁止。
 
 SQLITE3
     値の型
@@ -30,182 +33,154 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Final
-import discord
-from discord_util import get_channel
+from util import app_root
+
+SQLITE3_DIR: Final[Path] = app_root('database')
+
+class ReturnStatus(): ...
+class Successfully(ReturnStatus): ...
+class AlreadyAdded(ReturnStatus): ...
 
 class Channel():
 
-    DATABASE_PATH: Final[Path] = Path(__file__).parents[1].joinpath('db', 'channels.sqlite3')
-    TABLE_NAME: str = 'ID_REGISTER'
+    DATABASE_PATH: Final[Path] = SQLITE3_DIR.joinpath('channel.sqlite3')
+    TABLE_NAME: Final[str] = 'REGISTER_CHANNEL'
+    CREATE_TABLE_STATEMENT: Final[str] = f'''
+        CREATE TABLE {TABLE_NAME}(
+            GUILD_ID TEXT NOT NULL,
+            VOICE_CHANNEL_ID TEXT NOT NULL,
+            TEXT_CHANNEL_ID TEXT NOT NULL,
+            DELETE_KEY TEXT NOT NULL
+        );
+    '''
+    INSERT_STATEMENT: Final[str] = f'''
+        INSERT INTO {TABLE_NAME} VALUES(
+            :guild_id, 
+            :voice_channel_id, 
+            :text_channel_id, 
+            :delete_key
+        );
+    '''
+    SELECT_STATEMENT: Final[str] = f'''
+        SELECT 
+            *
+        FROM {TABLE_NAME}
+        <placeholder>;
+    '''# `<placeholder>`はコード内で動的に生成します。
+    DELETE_STATEMENT: Final[str] = f'''
+        DELETE FROM {TABLE_NAME}
+        WHERE DELETE_KEY = :delete_key;
+    '''
+    SQLITE_MASTER_STATEMENT: Final[str] = f'''
+        SELECT * FROM sqlite_master;
+    '''
 
     def __init__(self):
-        
-        self._conn = sqlite3.Connection(self.DATABASE_PATH)
-        self._cur = self._conn.cursor()
-
-        # テーブル存在確認(なければ追加)
-        if not self._exists_table(self.TABLE_NAME):
-            self._create_table()
+        """Constructor"""
+        self.connection = sqlite3.connect(self.DATABASE_PATH)
+        self.cursor = self.connection.cursor()
+        self.cursor.row_factory = self._dict_factory
+        self._create_table()
 
     def __del__(self):
         """Destructor"""
-        self._cur.close()
-        self._conn.close()
+        self.cursor.close()
+        self.connection.close()
 
-    def add_channel_ids(self,
-            guild_id: int,
-            voice_channel_id: int,
-            text_channel_id: int
-        ) -> bool | None:
-            """idをテーブルに追加します。すでにある場合は False 、エラーが発生した場合は None を返します。"""
-            exists_id_sql: str = f'''
-                SELECT 
-                    COUNT(*)
-                FROM
-                    {self.TABLE_NAME}
-                WHERE
-                    GUILD_ID = '{guild_id}'
-                    AND VC_ID = '{voice_channel_id}'
-                    AND TC_ID = '{text_channel_id}';
-            '''
-            self._cur.execute(exists_id_sql)
-            record_count = self._cur.fetchall()[0][0]
-
-            if record_count == 0:
-                
-                delete_key: str = self._get_delete_key()
-                add_id_sql: str = f'''
-                    INSERT INTO {self.TABLE_NAME} VALUES(
-                        '{guild_id}',
-                        '{voice_channel_id}',
-                        '{text_channel_id}',
-                        '{delete_key}'
-                    );
-                '''
-                try:
-                    self._cur.execute(add_id_sql)
-                    self._conn.commit()
-                    return True
-                
-                except Exception as e:
-                    return None
+    def add_channel_id(self, guild_id: int | str, 
+                       voice_channel_id: int | str, text_channel_id: int | str) -> ReturnStatus:
+        """ギルトID、ボイスチャンネルID、テキストチャンネルIDを登録します。
+        ここで削除キーを付与します。重複登録は無視されます。"""
+        exists_record_statement: str = self.SELECT_STATEMENT.replace(
+            '<placeholder>', 
+            '''WHERE GUILD_ID = :guild_id
+            AND VOICE_CHANNEL_ID = :voice_channel_id
+            AND TEXT_CHANNEL_ID = :text_channel_id'''
+        )
+        parameters: dict = {
+            'guild_id': str(guild_id),
+            'voice_channel_id': str(voice_channel_id),
+            'text_channel_id': str(text_channel_id)
+        }
+        try:
+            self.cursor.execute(exists_record_statement, parameters)
+            if len(self.cursor.fetchall()) == 0:
+                parameters['delete_key'] = self._generate_delete_key()
+                self.cursor.execute(self.INSERT_STATEMENT, parameters)
+                self.connection.commit()
+                return Successfully()
             else:
-                return False
-        
-    def del_channel_ids(self,
-        ctx: discord.ApplicationContext,
-        delete_key: str
-    ) -> list[bool | None, discord.VoiceChannel | None, discord.TextChannel | None]:
-        """削除成功 True, 削除するものがない False, エラー None """
-
-        def _get_record_count(delete_key: str) -> int:
-            registered_delete_keys_sql: str = f'''
-                SELECT
-                    VC_ID,
-                    TC_ID,
-                    DEL_KEY
-                FROM
-                    {self.TABLE_NAME}
-                WHERE
-                    DEL_KEY = '{delete_key}';
-            '''
-            self._cur.execute(registered_delete_keys_sql)
-            fetch = self._cur.fetchall()
-            return fetch
-
-        before = _get_record_count(delete_key)
-        if len(before) == 0:
-            return False, None, None
-
-        delete_id_sql: str = f'''
-            DELETE FROM {self.TABLE_NAME}
-            WHERE
-                DEL_KEY = '{delete_key}';
-        '''
-        try:
-            self._cur.execute(delete_id_sql)
-            self._conn.commit()
-
-            after = _get_record_count(delete_key)
-            if len(after) == 0:
-                vc = get_channel(ctx, before[0][0])
-                tc = get_channel(ctx, before[0][1])
-                return True, vc, tc
-            
+                return AlreadyAdded()
         except Exception as e:
-            return None, None, None
-
-    def get_channel_list(self, ctx: discord.ApplicationContext) -> list[tuple[int, int]]:
-        """ギルドIDのボイスチャンネルIDとテキストチャンネルIDを返します。
-        Returns [
-            (voice channel id, text channel id),
-            ...
-        ]
-        """
-        guild_vc_tc_sql: str = f'''
-            SELECT
-                VC_ID,
-                TC_ID,
-                DEL_KEY
-            FROM
-                {self.TABLE_NAME}
-            WHERE
-                GUILD_ID = '{ctx.guild.id}';
-        '''
-        self._cur.execute(guild_vc_tc_sql)
-        records: list = self._cur.fetchall()
-        return records
-
-    def _create_table(self) -> bool:
-        """ギルドID・チャンネルIDを格納するテーブルを生成します。"""
-        create_table_sql: str = f'''
-            CREATE TABLE {self.TABLE_NAME}(
-                GUILD_ID TEXT NOT NULL,
-                VC_ID TEXT NOT NULL,
-                TC_ID TEXT NOT NULL,
-                DEL_KEY TEXT NOT NULL
-            );
-            '''
-        try:
-            self._cur.execute(create_table_sql)
-            return True
-        
-        except Exception as e:
-            return False
-        
-    def _exists_table(self, table_name: str) -> bool:
-        """"""
-        table_names = [t['name'] for t in self._get_sqlite_master() if t['type'] == 'table']
-        return table_name in table_names
+            return Exception('function failed: `Channel.add_channel`')
     
-    def _get_delete_key(self) -> str:
+    def del_channel_id(self, delete_key: str) -> list:
+        """削除キーをキーにレコードを削除して、削除したレコードを返します。"""
+        # DELETE文では削除したレコードを取得できないので、予め取得しておく。
+        select_statement: str = self.SELECT_STATEMENT.replace(
+                                '<placeholder>', 'WHERE DELETE_KEY = :delete_key')
+        self.cursor.execute(select_statement, {'delete_key': delete_key})    
+        delete_records: list = self.cursor.fetchall()
+        self.cursor.execute(self.DELETE_STATEMENT, {'delete_key': delete_key})
+        self.connection.commit()
+        return delete_records
 
-        registered_delete_keys_sql: str = f'''
-            SELECT
-                DEL_KEY
-            FROM
-                {self.TABLE_NAME}
-        '''
-        
-        self._cur.execute(registered_delete_keys_sql)
-        registered_delete_keys = [key[0] for key in self._cur.fetchall()]
-        
+    def get_records_by_guild_id(self, guild_id: int | str) -> list:
+        """ギルドIDから登録されているレコードを返します。"""        
+        statement: str = self.SELECT_STATEMENT.replace(
+                         '<placeholder>', 'WHERE GUILD_ID = :guild_id')
+        self.cursor.execute(statement, {'guild_id': str(guild_id)})
+        return self.cursor.fetchall()
+    
+    def get_records_by_voice_channel_id(self, voice_channel_id: int | str) -> list:
+        """ボイスチャンネルIDから登録されているレコードを返します。"""
+        statement: str = self.SELECT_STATEMENT.replace(
+                         '<placeholder>', 'WHERE VOICE_CHANNEL_ID = :voice_channel_id')
+        self.cursor.execute(statement, {'voice_channel_id': str(voice_channel_id)})
+        return self.cursor.fetchall()
+
+    def get_records_by_delete_key(self, delete_key: str) -> list:
+        """削除キーから登録されているレコードを返します。"""
+        statement: str = self.SELECT_STATEMENT.replace(
+                         '<placeholder>', 'WHERE DELETE_KEY = :delete_key')
+        self.cursor.execute(statement, {'delete_key': delete_key})
+        return self.cursor.fetchall()
+
+    def get_records_by_guild_id_and_delete_key(self, guild_id: int | str, delete_key: str) -> list:
+        """ギルドIDと削除キーから登録されているレコードを返します。"""        
+        statement: str = self.SELECT_STATEMENT.replace(
+                         '<placeholder>', 'WHERE GUILD_ID = :guild_id AND DELETE_KEY = :delete_key')
+        self.cursor.execute(statement, {'guild_id': str(guild_id), 'delete_key': delete_key})
+        return self.cursor.fetchall()
+    
+    def _create_table(self):
+        """テーブルが無ければ生成します。"""
+        self.cursor.execute(self.SQLITE_MASTER_STATEMENT)
+        tables: dict = [record['name'] for record in self.cursor.fetchall() if record['type'] == 'table']
+        if not self.TABLE_NAME in tables:
+            self.cursor.execute(self.CREATE_TABLE_STATEMENT)
+
+    def _generate_delete_key(self) -> str:
+        """テーブルにない削除キーを生成して返します。"""
+        delete_key_count_statement: str = f'SELECT DELETE_KEY FROM {self.TABLE_NAME} WHERE DELETE_KEY = :delete_key'
         while True:
-            delete_key: str = hashlib.sha256(str(datetime.now()).encode()).hexdigest()[:4]
-            if delete_key not in registered_delete_keys:
-                return delete_key        
-
-    def _get_sqlite_master(self) -> list[dict[str, str]]:
+            generate_delete_key: str = hashlib.sha256(str(datetime.now()).encode()).hexdigest()[:4]
+            self.cursor.execute(delete_key_count_statement, {'delete_key': generate_delete_key})
+            if len(self.cursor.fetchall()) == 0:
+                return generate_delete_key
+            
+    def _dict_factory(self, cursor: sqlite3.Cursor, record: tuple) -> dict:
         """"""
-        self._cur.execute('SELECT * FROM sqlite_master')
-        column_names = [column[0] for column in self._cur.description]
-        sqlite_master = []
-        for record in self._cur.fetchall():
-            sqlite_master.append({k: v for k, v in zip(column_names, record)})
-        return sqlite_master
-
+        dict_record: dict = {}
+        column_names = [c[0] for c in cursor.description]
+        for column_name, value in zip(column_names, record):
+            dict_record[column_name] = value
+        return dict_record
+    
 if __name__ == '__main__':
     """Test code."""
-    
 
-
+    # channel = Channel()
+    # channel.add_channel_id('guild', 'voice', 'text')
+    # print(channel.get_register_channel('guild'))
+    # channel.del_channel_id('7680')
