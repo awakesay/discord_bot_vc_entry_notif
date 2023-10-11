@@ -4,9 +4,9 @@ import discord
 from channel import Channel, ReturnStatus, Successfully, AlreadyAdded
 from utils import get_bot_token
 
-VC_ENTRY_POST_TEXT: Final[str] = (
-    "<username> has joined " + "the <voice_channel> voice channel."
-)
+VC_ENTRY_POST_TEXT: Final[
+    str
+] = "<username> has joined the <voice_channel> voice channel.<activity_text>"
 
 
 def run_bot():
@@ -40,23 +40,36 @@ def run_bot():
         """ボイスチャンネル状態変化イベント"""
         if after.channel is None:  # 退出
             return
+        elif before.channel is after.channel:  # スピーカーミュートイベント
+            return
         elif member.bot:  # ボット
             return
+
         records: list = db_channel.get_records_by_voice_channel_id(
             str(after.channel.id)
         )
         if len(records) == 0:
             return
 
-        post_description: str = VC_ENTRY_POST_TEXT.replace(
-            "<username>", member.nick
-        ).replace("<voice_channel>", after.channel.name)
-        edit_description: str = VC_ENTRY_POST_TEXT.replace(
-            "<username>", discord_notation(member, True)
-        ).replace("<voice_channel>", discord_notation(after.channel))
+        activity_text_post = "" if member.activity is None else f"\nPlaying {member.activity.name}."
+        activity_text_edit = "" if member.activity is None else f"\nPlaying **{member.activity.name}**."
+
+        post_description: str = (
+            VC_ENTRY_POST_TEXT.replace("<username>", member.nick)
+            .replace("<voice_channel>", after.channel.name)
+            .replace("<activity_text>", activity_text_post)
+        )
+
+        edit_description: str = (
+            VC_ENTRY_POST_TEXT.replace("<username>", discord_notation(member, True))
+            .replace("<voice_channel>", discord_notation(after.channel))
+            .replace("<activity_text>", activity_text_edit)
+        )
+
         post_embed = discord.Embed(
             colour=discord.Color.green(), description=post_description
         )
+
         edit_embed = discord.Embed(
             colour=discord.Color.green(), description=edit_description
         )

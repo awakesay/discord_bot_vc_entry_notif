@@ -5,8 +5,8 @@ import json5
 APP_ROOT_PARENTS: Final[int] = 1
 
 
-def app_root(joinpath="") -> Path:
-    return Path(__file__).parents[APP_ROOT_PARENTS].joinpath(joinpath)
+def app_root(*joinpath) -> Path:
+    return Path(__file__).parents[APP_ROOT_PARENTS].joinpath(*joinpath)
 
 
 def get_bot_token() -> str:
