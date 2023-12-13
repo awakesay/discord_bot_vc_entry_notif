@@ -8,6 +8,7 @@ VC_ENTRY_POST_TEXT: Final[
     str
 ] = "<username> has joined the <voice_channel> voice channel.<activity_text>"
 
+VC_EVERYONE_LEAVE_POST_TEXT: Final[str] = "<voice_channel>. Good bye👋"
 
 def run_bot():
     db_channel = Channel()
@@ -38,45 +39,70 @@ def run_bot():
         member: discord.Member, before: discord.VoiceState, after: discord.VoiceState
     ):
         """ボイスチャンネル状態変化イベント"""
-        if after.channel is None:  # 退出
-            return
-        elif before.channel is after.channel:  # スピーカーミュートイベント
-            return
-        elif member.bot:  # ボット
-            return
+        if not member.bot and \
+            before.channel is not after.channel and \
+            after.channel is not None:
+            # ユーザー入室イベント
+            
+            records: list = db_channel.get_records_by_voice_channel_id(
+                str(after.channel.id)
+            )
+            if len(records) == 0:
+                return
 
-        records: list = db_channel.get_records_by_voice_channel_id(
-            str(after.channel.id)
-        )
-        if len(records) == 0:
-            return
+            activity_text_post = "" if member.activity is None else f"\nPlaying {member.activity.name}."
+            activity_text_edit = "" if member.activity is None else f"\nPlaying **{member.activity.name}**."
 
-        activity_text_post = "" if member.activity is None else f"\nPlaying {member.activity.name}."
-        activity_text_edit = "" if member.activity is None else f"\nPlaying **{member.activity.name}**."
+            post_description: str = (
+                VC_ENTRY_POST_TEXT.replace("<username>", member.nick)
+                .replace("<voice_channel>", after.channel.name)
+                .replace("<activity_text>", activity_text_post)
+            )
 
-        post_description: str = (
-            VC_ENTRY_POST_TEXT.replace("<username>", member.nick)
-            .replace("<voice_channel>", after.channel.name)
-            .replace("<activity_text>", activity_text_post)
-        )
+            edit_description: str = (
+                VC_ENTRY_POST_TEXT.replace("<username>", discord_notation(member, True))
+                .replace("<voice_channel>", discord_notation(after.channel))
+                .replace("<activity_text>", activity_text_edit)
+            )
 
-        edit_description: str = (
-            VC_ENTRY_POST_TEXT.replace("<username>", discord_notation(member, True))
-            .replace("<voice_channel>", discord_notation(after.channel))
-            .replace("<activity_text>", activity_text_edit)
-        )
+            post_embed = discord.Embed(
+                colour=discord.Color.green(), description=post_description
+            )
 
-        post_embed = discord.Embed(
-            colour=discord.Color.green(), description=post_description
-        )
+            edit_embed = discord.Embed(
+                colour=discord.Color.green(), description=edit_description
+            )
 
-        edit_embed = discord.Embed(
-            colour=discord.Color.green(), description=edit_description
-        )
-        for text_channel_id in [int(record["TEXT_CHANNEL_ID"]) for record in records]:
-            post_channel: discord.TextChannel = bot.get_channel(text_channel_id)
-            post_message = await post_channel.send(embed=post_embed)
-            await post_message.edit(embed=edit_embed)
+            for text_channel_id in [int(record["TEXT_CHANNEL_ID"]) for record in records]:
+                post_channel: discord.TextChannel = bot.get_channel(text_channel_id)
+                post_message = await post_channel.send(embed=post_embed)
+                await post_message.edit(embed=edit_embed)
+
+
+        if before.channel is not None and len(before.channel.members) == 0:
+            # 全員退室イベント
+
+            records: list = db_channel.get_records_by_voice_channel_id(
+                str(before.channel.id)
+            )
+            if len(records) == 0:
+                return
+            
+            post_description: str = VC_EVERYONE_LEAVE_POST_TEXT.replace("<voice_channel>", before.channel.name)
+            edit_description: str = VC_EVERYONE_LEAVE_POST_TEXT.replace("<voice_channel>", discord_notation(before.channel, False))
+
+            post_embed = discord.Embed(
+                colour=discord.Color.purple(), description=post_description
+            )
+
+            edit_embed = discord.Embed(
+                colour=discord.Color.purple(), description=edit_description
+            )
+
+            for text_channel_id in [int(record["TEXT_CHANNEL_ID"]) for record in records]:
+                post_channel: discord.TextChannel = bot.get_channel(text_channel_id)
+                post_message = await post_channel.send(embed=post_embed)
+                await post_message.edit(embed=edit_embed)
 
     # Slash command functions =================================================
 
